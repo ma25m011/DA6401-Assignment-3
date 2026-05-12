@@ -192,7 +192,15 @@ class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000) -> None:
         super().__init__()
-        raise NotImplementedError
+        self.dropout = nn.Dropout(p=dropout)
+        pe = torch.zeros(1, max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1).float()          # [max_len, 1]
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )                                                                   # [d_model/2]
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+        pe[0, :, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -201,10 +209,11 @@ class PositionalEncoding(nn.Module):
 
         Returns:
             Tensor of same shape [batch, seq_len, d_model]
-            = x  +  PE[:, :seq_len, :]  
+            = x  +  PE[:, :seq_len, :]
 
         """
-        raise NotImplementedError
+        x = x + self.pe[:, :x.size(1), :]
+        return self.dropout(x)
 
 
 # ══════════════════════════════════════════════════════════════════════
