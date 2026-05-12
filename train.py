@@ -352,8 +352,91 @@ def run_training_experiment() -> None:
                bleu = evaluate_bleu(model, test_loader, tgt_vocab)
                wandb.log({'test_bleu': bleu})
     """
-    # TODO: implement full experiment
-    raise NotImplementedError
+    import wandb
+    from functools import partial
+    from dataset import Multi30kDataset, collate_fn
+
+    config = {
+        'd_model':       512,
+        'N':             6,
+        'num_heads':     8,
+        'd_ff':          2048,
+        'dropout':       0.1,
+        'warmup_steps':  4000,
+        'batch_size':    128,
+        'num_epochs':    20,
+        'smoothing':     0.1,
+        'lr':            1.0,
+    }
+
+    wandb.init(project="da6401-a3", config=config)
+    cfg = wandb.config
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Training on {device}")
+
+    # ── Dataset ────────────────────────────────────────────────────────
+    train_ds = Multi30kDataset(split='train')
+    val_ds   = Multi30kDataset(split='validation',
+                               src_vocab=train_ds.src_vocab,
+                               tgt_vocab=train_ds.tgt_vocab)
+    test_ds  = Multi30kDataset(split='test',
+                               src_vocab=train_ds.src_vocab,
+                               tgt_vocab=train_ds.tgt_vocab)
+
+    pad = train_ds.PAD
+    _collate = partial(collate_fn, pad_idx=pad)
+
+    train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,
+                              collate_fn=_collate)
+    val_loader   = DataLoader(val_ds,   batch_size=cfg.batch_size, shuffle=False,
+                              collate_fn=_collate)
+    test_loader  = DataLoader(test_ds,  batch_size=1,              shuffle=False,
+                              collate_fn=_collate)
+
+    src_vocab_size = len(train_ds.src_vocab)
+    tgt_vocab_size = len(train_ds.tgt_vocab)
+
+    # ── Model ──────────────────────────────────────────────────────────
+    model = Transformer(
+        src_vocab_size=src_vocab_size,
+        tgt_vocab_size=tgt_vocab_size,
+        d_model=cfg.d_model,
+        N=cfg.N,
+        num_heads=cfg.num_heads,
+        d_ff=cfg.d_ff,
+        dropout=cfg.dropout,
+    ).to(device)
+
+    # ── Optimizer / scheduler / loss ───────────────────────────────────
+    from lr_scheduler import NoamScheduler
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr,
+                                 betas=(0.9, 0.98), eps=1e-9)
+    scheduler = NoamScheduler(optimizer, d_model=cfg.d_model,
+                              warmup_steps=cfg.warmup_steps)
+    loss_fn   = LabelSmoothingLoss(tgt_vocab_size, pad_idx=pad,
+                                   smoothing=cfg.smoothing)
+
+    # ── Training loop ──────────────────────────────────────────────────
+    for epoch in range(cfg.num_epochs):
+        train_loss = run_epoch(train_loader, model, loss_fn, optimizer,
+                               scheduler, epoch_num=epoch, is_train=True,
+                               device=device)
+        val_loss   = run_epoch(val_loader,   model, loss_fn, None,
+                               None, epoch_num=epoch, is_train=False,
+                               device=device)
+
+        wandb.log({'epoch': epoch, 'train_loss': train_loss, 'val_loss': val_loss})
+        print(f"Epoch {epoch:02d}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
+
+        save_checkpoint(model, optimizer, scheduler, epoch,
+                        path=f"checkpoint_epoch{epoch}.pt")
+
+    # ── Final BLEU ─────────────────────────────────────────────────────
+    bleu = evaluate_bleu(model, test_loader, train_ds.tgt_vocab, device=device)
+    wandb.log({'test_bleu': bleu})
+    print(f"Test BLEU: {bleu:.2f}")
+    wandb.finish()
 
 
 if __name__ == "__main__":
