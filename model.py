@@ -513,12 +513,35 @@ class Transformer(nn.Module):
     def infer(self, src_sentence: str) -> str:
         """
         Translates a German sentence to English using greedy autoregressive decoding.
-        
+
         Args:
             src_sentence: The raw German text.
-            
-            
+
+
         Returns:
             The fully translated English string, detokenized and clean.
         """
-        raise NotImplementedError
+        self.eval()
+        with torch.no_grad():
+            tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
+            sos = self.src_vocab.get('<sos>', 2)
+            eos = self.src_vocab.get('<eos>', 3)
+            unk = self.src_vocab.get('<unk>', 0)
+            src_ids = [sos] + [self.src_vocab.get(t, unk) for t in tokens] + [eos]
+            src = torch.tensor([src_ids], dtype=torch.long, device=self.device)
+            src_mask = make_src_mask(src)
+            memory = self.encode(src, src_mask)
+            tgt_sos = self.tgt_vocab.get('<sos>', 2)
+            tgt_eos = self.tgt_vocab.get('<eos>', 3)
+            ys = torch.tensor([[tgt_sos]], dtype=torch.long, device=self.device)
+            for _ in range(100):
+                tgt_mask = make_tgt_mask(ys)
+                logits = self.decode(memory, src_mask, ys, tgt_mask)
+                next_tok = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+                ys = torch.cat([ys, next_tok], dim=1)
+                if next_tok.item() == tgt_eos:
+                    break
+            idx_to_tok = {v: k for k, v in self.tgt_vocab.items()}
+            out_tokens = [idx_to_tok.get(i.item(), '') for i in ys[0, 1:]]
+            out_tokens = [t for t in out_tokens if t not in ('<eos>', '<pad>', '<sos>', '')]
+            return ' '.join(out_tokens)
