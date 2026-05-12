@@ -102,7 +102,41 @@ def run_epoch(
         avg_loss : Average loss over the epoch (float).
 
     """
-    raise NotImplementedError
+    model.train() if is_train else model.eval()
+    total_loss = 0.0
+    total_batches = 0
+
+    context = torch.enable_grad() if is_train else torch.no_grad()
+    with context:
+        for src, tgt in data_iter:
+            src = src.to(device)
+            tgt = tgt.to(device)
+
+            # Teacher forcing: decoder input drops last token, target drops first
+            tgt_input = tgt[:, :-1]
+            tgt_labels = tgt[:, 1:]
+
+            src_mask = make_src_mask(src)
+            tgt_mask = make_tgt_mask(tgt_input)
+
+            logits = model(src, tgt_input, src_mask, tgt_mask)  # [B, T, vocab]
+
+            # Flatten for loss
+            B, T, V = logits.shape
+            loss = loss_fn(logits.reshape(B * T, V), tgt_labels.reshape(B * T))
+
+            if is_train:
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+
+            total_loss += loss.item()
+            total_batches += 1
+
+    return total_loss / total_batches if total_batches > 0 else 0.0
 
 
 # ══════════════════════════════════════════════════════════════════════
