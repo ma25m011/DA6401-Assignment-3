@@ -170,8 +170,18 @@ def greedy_decode(
              or when max_len is reached.
 
     """
-    # TODO: Task 3.3 — implement token-by-token greedy decoding
-    raise NotImplementedError
+    model.eval()
+    with torch.no_grad():
+        memory = model.encode(src.to(device), src_mask.to(device))
+        ys = torch.tensor([[start_symbol]], dtype=torch.long, device=device)
+        for _ in range(max_len - 1):
+            tgt_mask = make_tgt_mask(ys)
+            logits = model.decode(memory, src_mask.to(device), ys, tgt_mask)
+            next_tok = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            ys = torch.cat([ys, next_tok], dim=1)
+            if next_tok.item() == end_symbol:
+                break
+    return ys
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -202,8 +212,34 @@ def evaluate_bleu(
         bleu_score : Corpus-level BLEU (float, range 0–100).
 
     """
-    # TODO: Task 3 — loop test set, decode, compute and return BLEU
-    raise NotImplementedError
+    from nltk.translate.bleu_score import corpus_bleu
+
+    model.eval()
+    idx_to_tok = {v: k for k, v in tgt_vocab.items()}
+    special = {tgt_vocab.get('<sos>', 2), tgt_vocab.get('<eos>', 3), tgt_vocab.get('<pad>', 1)}
+
+    hypotheses = []
+    references = []
+
+    with torch.no_grad():
+        for src, tgt in test_dataloader:
+            for i in range(src.size(0)):
+                src_i = src[i].unsqueeze(0).to(device)
+                src_mask_i = make_src_mask(src_i)
+                sos = tgt_vocab.get('<sos>', 2)
+                eos = tgt_vocab.get('<eos>', 3)
+
+                out = greedy_decode(model, src_i, src_mask_i, max_len, sos, eos, device)
+                # out: [1, out_len] — strip <sos> at index 0
+                hyp = [idx_to_tok.get(t.item(), '<unk>') for t in out[0, 1:] if t.item() not in special]
+
+                ref_ids = tgt[i].tolist()
+                ref = [idx_to_tok.get(t, '<unk>') for t in ref_ids if t not in special]
+
+                hypotheses.append(hyp)
+                references.append([ref])
+
+    return corpus_bleu(references, hypotheses) * 100
 
 
 # ══════════════════════════════════════════════════════════════════════
