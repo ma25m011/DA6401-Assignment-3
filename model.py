@@ -138,7 +138,11 @@ class MultiHeadAttention(nn.Module):
         self.d_model   = d_model
         self.num_heads = num_heads
         self.d_k       = d_model // num_heads   # depth per head
-        raise NotImplementedError
+        self.W_Q = nn.Linear(d_model, d_model)
+        self.W_K = nn.Linear(d_model, d_model)
+        self.W_V = nn.Linear(d_model, d_model)
+        self.W_O = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(p=dropout)
     
     def forward(
         self,
@@ -160,7 +164,16 @@ class MultiHeadAttention(nn.Module):
             output : shape [batch, seq_q, d_model]
 
         """
-        raise NotImplementedError
+        B = query.size(0)
+        # Project and split into heads: [B, seq, d_model] -> [B, heads, seq, d_k]
+        Q = self.W_Q(query).view(B, -1, self.num_heads, self.d_k).transpose(1, 2)
+        K = self.W_K(key).view(B, -1, self.num_heads, self.d_k).transpose(1, 2)
+        V = self.W_V(value).view(B, -1, self.num_heads, self.d_k).transpose(1, 2)
+        # Attention
+        out, _ = scaled_dot_product_attention(Q, K, V, mask)
+        # Merge heads: [B, heads, seq, d_k] -> [B, seq, d_model]
+        out = out.transpose(1, 2).contiguous().view(B, -1, self.d_model)
+        return self.W_O(out)
 
 
 # ══════════════════════════════════════════════════════════════════════
