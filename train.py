@@ -276,8 +276,25 @@ def save_checkpoint(
          'd_model': ..., 'N': ..., 'num_heads': ...,
          'd_ff': ..., 'dropout': ...}
     """
-    # TODO: implement using torch.save({...}, path)
-    raise NotImplementedError
+    src_vocab_size, tgt_vocab_size = (
+        model.src_embed.num_embeddings,
+        model.tgt_embed.num_embeddings,
+    )
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+        'model_config': {
+            'src_vocab_size': src_vocab_size,
+            'tgt_vocab_size': tgt_vocab_size,
+            'd_model': model.d_model,
+            'N': len(model.encoder.layers),
+            'num_heads': model.encoder.layers[0].self_attn.num_heads,
+            'd_ff': model.encoder.layers[0].ffn.linear1.out_features,
+            'dropout': model.pos_enc.dropout.p,
+        },
+    }, path)
 
 
 def load_checkpoint(
@@ -299,8 +316,13 @@ def load_checkpoint(
         epoch : The epoch at which the checkpoint was saved (int).
 
     """
-    # TODO: implement restore logic
-    raise NotImplementedError
+    ckpt = torch.load(path, map_location='cpu')
+    model.load_state_dict(ckpt['model_state_dict'])
+    if optimizer is not None:
+        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+    if scheduler is not None:
+        scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+    return int(ckpt['epoch'])
 
 
 # ══════════════════════════════════════════════════════════════════════
