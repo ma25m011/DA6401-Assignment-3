@@ -8,6 +8,7 @@ from datasets import load_dataset
 import spacy
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 class Multi30kDataset(Dataset):
@@ -51,9 +52,13 @@ class Multi30kDataset(Dataset):
     def _build_vocab(self, train_data):
         src_counter = Counter()
         tgt_counter = Counter()
-        for example in train_data:
-            src_counter.update(self._tokenize_de(example['de']))
-            tgt_counter.update(self._tokenize_en(example['en']))
+        de_texts = [ex['de'] for ex in train_data]
+        en_texts = [ex['en'] for ex in train_data]
+        print("Building vocab...")
+        for doc in tqdm(self.nlp_de.pipe(de_texts, batch_size=256), total=len(de_texts), desc="Tokenizing DE"):
+            src_counter.update(tok.text.lower() for tok in doc)
+        for doc in tqdm(self.nlp_en.pipe(en_texts, batch_size=256), total=len(en_texts), desc="Tokenizing EN"):
+            tgt_counter.update(tok.text.lower() for tok in doc)
 
         src_vocab = {tok: idx for idx, tok in enumerate(self.SPECIAL)}
         for tok, _ in src_counter.most_common():
@@ -73,12 +78,14 @@ class Multi30kDataset(Dataset):
         return [self.SOS] + [vocab.get(t, self.UNK) for t in tokens] + [self.EOS]
 
     def _process_data(self, raw_data):
+        de_texts = [ex['de'] for ex in raw_data]
+        en_texts = [ex['en'] for ex in raw_data]
         processed = []
-        for example in raw_data:
-            src_tokens = self._tokenize_de(example['de'])
-            tgt_tokens = self._tokenize_en(example['en'])
-            src_ids = self._encode(src_tokens, self.src_vocab)
-            tgt_ids = self._encode(tgt_tokens, self.tgt_vocab)
+        de_docs = list(tqdm(self.nlp_de.pipe(de_texts, batch_size=256), total=len(de_texts), desc=f"Processing {self.split} DE"))
+        en_docs = list(tqdm(self.nlp_en.pipe(en_texts, batch_size=256), total=len(en_texts), desc=f"Processing {self.split} EN"))
+        for de_doc, en_doc in zip(de_docs, en_docs):
+            src_ids = self._encode([t.text.lower() for t in de_doc], self.src_vocab)
+            tgt_ids = self._encode([t.text.lower() for t in en_doc], self.tgt_vocab)
             processed.append((src_ids, tgt_ids))
         return processed
 

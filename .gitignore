@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Dataset cache (large, reproducible via dataset.py)
+dataset_cache.pkl
+
+# Checkpoints (large binary files — upload to Google Drive instead)
+checkpoints/
+
+# W&B local run data
+wandb/
+
+# Temp logs
+exp*_log.txt
+
+# VS Code
+.vscode/

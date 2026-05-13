@@ -352,6 +352,8 @@ def run_training_experiment() -> None:
                bleu = evaluate_bleu(model, test_loader, tgt_vocab)
                wandb.log({'test_bleu': bleu})
     """
+    import os
+    import shutil
     import wandb
     from functools import partial
     from dataset import Multi30kDataset, collate_fn
@@ -371,6 +373,12 @@ def run_training_experiment() -> None:
 
     wandb.init(project="da6401-a3", config=config)
     cfg = wandb.config
+
+    # Clear and recreate checkpoint folder on every run
+    ckpt_dir = "checkpoints"
+    if os.path.exists(ckpt_dir):
+        shutil.rmtree(ckpt_dir)
+    os.makedirs(ckpt_dir)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Training on {device}")
@@ -430,7 +438,7 @@ def run_training_experiment() -> None:
         print(f"Epoch {epoch:02d}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
 
         save_checkpoint(model, optimizer, scheduler, epoch,
-                        path=f"checkpoint_epoch{epoch}.pt")
+                        path=os.path.join(ckpt_dir, f"checkpoint_epoch{epoch:02d}.pt"))
 
     # ── Final BLEU ─────────────────────────────────────────────────────
     bleu = evaluate_bleu(model, test_loader, train_ds.tgt_vocab, device=device)
