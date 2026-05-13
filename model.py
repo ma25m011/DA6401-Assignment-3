@@ -442,7 +442,7 @@ class Transformer(nn.Module):
                 nn.init.xavier_uniform_(p)
 
         if checkpoint_path is not None:
-            gdown.download(id="<.pth drive id>", output=checkpoint_path, quiet=False)
+            gdown.download(id="1B2BkIfmQ2niIKluTW_60ehnreToe2vkJ", output=checkpoint_path, quiet=False)
 
     # ── AUTOGRADER HOOKS ── keep these signatures exactly ─────────────
 
