@@ -1,17 +1,126 @@
-# DA6401 - Assignment 3: Implementing the Transformer for Machine Translation
+# DA6401 - Assignment 3: Implementing a Transformer for Machine Translation
 
 ## Overview
 
-In this assignment, you will implement the landmark architecture from the paper "Attention Is All You Need" from scratch using PyTorch. The goal is to develop a Neural Machine Translation (NMT) system capable of translating text from German to English using the Multi30k dataset.
+Implementation of the Transformer architecture from ["Attention Is All You Need"](https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf) (Vaswani et al., 2017) for German→English Neural Machine Translation on the Multi30k dataset.
+
+- **Dataset:** [bentrevett/multi30k](https://huggingface.co/datasets/bentrevett/multi30k) — 29,000 train / 1,014 val / 1,000 test pairs
+- **Task:** German → English translation
+- **Evaluation:** Corpus-level BLEU score
 
 ## Project Structure
 
-```text
-assignment3/
-├── requirements.txt
-├── README.md
-├── model.py           # Core Transformer architecture (Encoders, Decoders, Multi-Head Attention)
-├── utils.py           # Label Smoothing, Noam Scheduler, Masking Utilities
-├── dataset.py         # Multi30k dataset loading and spacy tokenization
-├── train.py           # Training loops and Greedy Decoding inference
 ```
+da6401_assignment_3/
+├── model.py           # Full Transformer architecture
+│                      #   scaled_dot_product_attention, make_src_mask, make_tgt_mask
+│                      #   MultiHeadAttention, PositionalEncoding
+│                      #   PositionwiseFeedForward, EncoderLayer, DecoderLayer
+│                      #   Encoder, Decoder, Transformer
+├── lr_scheduler.py    # NoamScheduler (warmup + inverse sqrt decay)
+├── dataset.py         # Multi30kDataset — spaCy tokenization, vocab, collate_fn
+├── train.py           # LabelSmoothingLoss, run_epoch, greedy_decode,
+│                      #   evaluate_bleu, save_checkpoint, load_checkpoint,
+│                      #   run_training_experiment
+├── experiments.py     # 5 W&B ablation experiments
+├── plots/             # Saved plots (attention heatmaps etc.)
+├── requirements.txt
+└── README.md
+```
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+python -m spacy download de_core_news_sm
+python -m spacy download en_core_web_sm
+wandb login
+```
+
+## Training
+
+```bash
+python train.py
+```
+
+Trains for 20 epochs with the base config (d_model=512, N=6, num_heads=8, d_ff=2048). Logs to W&B project `da6401-a3`. Checkpoints saved to `checkpoints/`.
+
+## Hyperparameters
+
+| Parameter | Value |
+|-----------|-------|
+| d_model | 512 |
+| N (layers) | 6 |
+| num_heads | 8 |
+| d_ff | 2048 |
+| dropout | 0.1 |
+| warmup_steps | 4000 |
+| batch_size | 128 |
+| label smoothing ε | 0.1 |
+| Adam β1, β2, ε | 0.9, 0.98, 1e-9 |
+
+## Results
+
+| Metric | Value |
+|--------|-------|
+| Test BLEU (20 epochs) | 22.16 |
+
+## W&B Ablation Experiments
+
+Run all 5 experiments:
+```bash
+python experiments.py
+```
+
+Run a single experiment:
+```bash
+python experiments.py --exp 3
+```
+
+| # | Experiment | W&B Group | Key finding |
+|---|-----------|-----------|-------------|
+| 1 | Noam scheduler vs fixed LR | `exp1-scheduler` | Noam trains more stably; fixed LR starts lower due to no warmup but both converge similarly at 8 epochs |
+| 2 | With vs without √(1/d_k) scaling | `exp2-scaling` | Logged Q/K gradient norms for first 1000 steps — scaling prevents exploding gradients |
+| 3 | Attention rollout heatmap | `exp3-attention` | Per-head attention weights from last encoder layer logged as W&B image |
+| 4 | Sinusoidal PE vs learned PE | `exp4-pe` | Sinusoidal: **19.91 BLEU** vs Learned: **17.70 BLEU** |
+| 5 | Label smoothing ε=0.1 vs ε=0.0 | `exp5-smoothing` | ε=0.0 reaches higher prediction confidence (~0.44) vs ε=0.1 (~0.40) — smoothing acts as regularizer |
+
+## Implementation Notes
+
+- `MultiHeadAttention` is implemented from scratch — `torch.nn.MultiheadAttention` is **not used**
+- Positional encoding uses `register_buffer` (not `nn.Parameter`) so it is not trained
+- Mask convention: `True` = masked out (set to `-inf` before softmax)
+- Post-LayerNorm used: `norm(x + sublayer(x))` as in the original paper
+- Embeddings scaled by √d_model before adding positional encoding (§3.4 of the paper)
+- `NoamScheduler` uses `step = last_epoch + 1` to avoid division by zero at step 0
+- `run_epoch` uses teacher forcing: decoder input = `tgt[:, :-1]`, labels = `tgt[:, 1:]`
+- `greedy_decode` and `Transformer.infer` implement inline greedy decoding (no circular imports)
+
+## Autograder Contracts
+
+The following signatures must not be changed:
+
+```
+model.py:
+  scaled_dot_product_attention(Q, K, V, mask) → (output, attn_weights)
+  make_src_mask(src, pad_idx)                 → BoolTensor [B, 1, 1, src_len]
+  make_tgt_mask(tgt, pad_idx)                 → BoolTensor [B, 1, tgt_len, tgt_len]
+  MultiHeadAttention.forward(q, k, v, mask)   → Tensor
+  PositionalEncoding.forward(x)               → Tensor
+  Transformer.encode(src, src_mask)           → Tensor
+  Transformer.decode(memory, src_m, tgt, tgt_m) → Tensor
+
+train.py:
+  greedy_decode(model, src, src_mask, max_len, start_symbol, end_symbol, device)
+      → Tensor [1, out_len]
+  evaluate_bleu(model, test_dataloader, tgt_vocab, device) → float (0–100)
+  save_checkpoint(model, optimizer, scheduler, epoch, path) → None
+  load_checkpoint(path, model, optimizer, scheduler) → int
+```
+
+## Submission
+
+- **Deadline:** 19th May 2026, 23:59 PM
+- **Late deadline:** 24th May 2026, 23:59 PM (with penalty)
+- Submit code + public W&B report link via **Gradescope**
+- W&B report must be public during evaluation — failure results in negative marking
