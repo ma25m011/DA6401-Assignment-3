@@ -85,7 +85,7 @@ python experiments.py --exp 3
 | 4 | Sinusoidal PE vs learned PE | `exp4-pe` | Sinusoidal: **19.91 BLEU** vs Learned: **17.70 BLEU** |
 | 5 | Label smoothing ε=0.1 vs ε=0.0 | `exp5-smoothing` | ε=0.0 reaches higher prediction confidence (~0.44) vs ε=0.1 (~0.40) — smoothing acts as regularizer |
 
-## Implementation Notes
+## Implementation
 
 - `MultiHeadAttention` is implemented from scratch — `torch.nn.MultiheadAttention` is **not used**
 - Positional encoding uses `register_buffer` (not `nn.Parameter`) so it is not trained
@@ -96,31 +96,3 @@ python experiments.py --exp 3
 - `run_epoch` uses teacher forcing: decoder input = `tgt[:, :-1]`, labels = `tgt[:, 1:]`
 - `greedy_decode` and `Transformer.infer` implement inline greedy decoding (no circular imports)
 
-## Autograder Contracts
-
-The following signatures must not be changed:
-
-```
-model.py:
-  scaled_dot_product_attention(Q, K, V, mask) → (output, attn_weights)
-  make_src_mask(src, pad_idx)                 → BoolTensor [B, 1, 1, src_len]
-  make_tgt_mask(tgt, pad_idx)                 → BoolTensor [B, 1, tgt_len, tgt_len]
-  MultiHeadAttention.forward(q, k, v, mask)   → Tensor
-  PositionalEncoding.forward(x)               → Tensor
-  Transformer.encode(src, src_mask)           → Tensor
-  Transformer.decode(memory, src_m, tgt, tgt_m) → Tensor
-
-train.py:
-  greedy_decode(model, src, src_mask, max_len, start_symbol, end_symbol, device)
-      → Tensor [1, out_len]
-  evaluate_bleu(model, test_dataloader, tgt_vocab, device) → float (0–100)
-  save_checkpoint(model, optimizer, scheduler, epoch, path) → None
-  load_checkpoint(path, model, optimizer, scheduler) → int
-```
-
-## Submission
-
-- **Deadline:** 19th May 2026, 23:59 PM
-- **Late deadline:** 24th May 2026, 23:59 PM (with penalty)
-- Submit code + public W&B report link via **Gradescope**
-- W&B report must be public during evaluation — failure results in negative marking
