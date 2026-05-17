@@ -58,15 +58,12 @@ class LabelSmoothingLoss(nn.Module):
         # TODO: Task 3.1
         log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
 
-        # Build smoothed distribution
         smooth_val = self.smoothing / (self.vocab_size - 1)
         y_smooth = torch.full_like(log_probs, smooth_val)
         y_smooth.scatter_(1, target.unsqueeze(1), 1.0 - self.smoothing)
-
-        # Zero out pad positions
         y_smooth[target == self.pad_idx] = 0.0
 
-        # KL divergence: sum(y * log(y/p)) = -sum(y * log_p) when using log_probs
+        # KL divergence: -sum(y * log_p) when y is the smoothed target
         loss = -(y_smooth * log_probs).sum()
         return loss
 
@@ -121,7 +118,6 @@ def run_epoch(
 
             logits = model(src, tgt_input, src_mask, tgt_mask)  # [B, T, vocab]
 
-            # Flatten for loss
             B, T, V = logits.shape
             loss = loss_fn(logits.reshape(B * T, V), tgt_labels.reshape(B * T))
 
@@ -280,7 +276,7 @@ def save_checkpoint(
         model.src_embed.num_embeddings,
         model.tgt_embed.num_embeddings,
     )
-    torch.save({
+    ckpt = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
@@ -294,7 +290,13 @@ def save_checkpoint(
             'd_ff': model.encoder.layers[0].ffn.linear1.out_features,
             'dropout': model.pos_enc.dropout.p,
         },
-    }, path)
+    }
+    # Save vocab dicts if available (needed for infer() after checkpoint load)
+    if hasattr(model, 'src_vocab') and model.src_vocab is not None:
+        ckpt['src_vocab'] = model.src_vocab
+    if hasattr(model, 'tgt_vocab') and model.tgt_vocab is not None:
+        ckpt['tgt_vocab'] = model.tgt_vocab
+    torch.save(ckpt, path)
 
 
 def load_checkpoint(
@@ -374,7 +376,6 @@ def run_training_experiment() -> None:
     wandb.init(project="da6401-a3", config=config)
     cfg = wandb.config
 
-    # Clear and recreate checkpoint folder on every run
     ckpt_dir = "checkpoints"
     if os.path.exists(ckpt_dir):
         shutil.rmtree(ckpt_dir)
@@ -415,6 +416,9 @@ def run_training_experiment() -> None:
         d_ff=cfg.d_ff,
         dropout=cfg.dropout,
     ).to(device)
+    # Store vocab dicts on model so save_checkpoint can persist them for infer()
+    model.src_vocab = train_ds.src_vocab
+    model.tgt_vocab = train_ds.tgt_vocab
 
     # ── Optimizer / scheduler / loss ───────────────────────────────────
     from lr_scheduler import NoamScheduler

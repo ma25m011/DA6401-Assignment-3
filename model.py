@@ -165,13 +165,13 @@ class MultiHeadAttention(nn.Module):
 
         """
         B = query.size(0)
-        # Project and split into heads: [B, seq, d_model] -> [B, heads, seq, d_k]
+        # [B, seq, d_model] -> [B, heads, seq, d_k]
         Q = self.W_Q(query).view(B, -1, self.num_heads, self.d_k).transpose(1, 2)
         K = self.W_K(key).view(B, -1, self.num_heads, self.d_k).transpose(1, 2)
         V = self.W_V(value).view(B, -1, self.num_heads, self.d_k).transpose(1, 2)
-        # Attention
+
         out, _ = scaled_dot_product_attention(Q, K, V, mask)
-        # Merge heads: [B, heads, seq, d_k] -> [B, seq, d_model]
+        # [B, heads, seq, d_k] -> [B, seq, d_model]
         out = out.transpose(1, 2).contiguous().view(B, -1, self.d_model)
         return self.W_O(out)
 
@@ -404,27 +404,52 @@ class Transformer(nn.Module):
     Full Encoder-Decoder Transformer for sequence-to-sequence tasks.
 
     Args:
-        src_vocab_size (int)  : Source vocabulary size.
-        tgt_vocab_size (int)  : Target vocabulary size.
+        src_vocab_size (int)  : Source vocabulary size. If None, loaded from checkpoint.
+        tgt_vocab_size (int)  : Target vocabulary size. If None, loaded from checkpoint.
         d_model        (int)  : Model dimensionality (default 512).
         N              (int)  : Number of encoder/decoder layers (default 6).
         num_heads      (int)  : Number of attention heads (default 8).
         d_ff           (int)  : FFN inner dimensionality (default 2048).
         dropout        (float): Dropout probability (default 0.1).
+        checkpoint_path (str) : If provided, download checkpoint from Google Drive,
+                                load model_config and weights automatically.
     """
+
+    # Google Drive file ID for the best checkpoint
+    _GDRIVE_FILE_ID = "1nxN-ZgwXUos5aU_v6172baqMHwO39Vvf"
 
     def __init__(
         self,
-        src_vocab_size: int,
-        tgt_vocab_size: int,
-        d_model:   int   = 512,
-        N:         int   = 6,
-        num_heads: int   = 8,
-        d_ff:      int   = 2048,
-        dropout:   float = 0.1,
-        checkpoint_path: str = None,
+        src_vocab_size: int   = None,
+        tgt_vocab_size: int   = None,
+        d_model:        int   = 512,
+        N:              int   = 6,
+        num_heads:      int   = 8,
+        d_ff:           int   = 2048,
+        dropout:        float = 0.1,
+        checkpoint_path: str  = None,
     ) -> None:
         super().__init__()
+
+        if checkpoint_path is not None:
+            if not os.path.exists(checkpoint_path):
+                gdown.download(id=self._GDRIVE_FILE_ID, output=checkpoint_path, quiet=False)
+            ckpt = torch.load(checkpoint_path, map_location='cpu')
+            cfg = ckpt.get('model_config', {})
+            src_vocab_size = cfg.get('src_vocab_size', src_vocab_size)
+            tgt_vocab_size = cfg.get('tgt_vocab_size', tgt_vocab_size)
+            d_model   = cfg.get('d_model',   d_model)
+            N         = cfg.get('N',         N)
+            num_heads = cfg.get('num_heads', num_heads)
+            d_ff      = cfg.get('d_ff',      d_ff)
+            dropout   = cfg.get('dropout',   dropout)
+
+        if src_vocab_size is None or tgt_vocab_size is None:
+            raise ValueError(
+                "src_vocab_size and tgt_vocab_size must be provided, "
+                "either directly or via a checkpoint with model_config."
+            )
+
         self.d_model = d_model
 
         enc_layer = EncoderLayer(d_model, num_heads, d_ff, dropout)
@@ -442,7 +467,19 @@ class Transformer(nn.Module):
                 nn.init.xavier_uniform_(p)
 
         if checkpoint_path is not None:
-            gdown.download(id="1B2BkIfmQ2niIKluTW_60ehnreToe2vkJ", output=checkpoint_path, quiet=False)
+            self.load_state_dict(ckpt['model_state_dict'])
+            self.eval()
+            # vocab dicts + spaCy tokenizer needed for infer()
+            self.src_vocab = ckpt.get('src_vocab', None)
+            self.tgt_vocab = ckpt.get('tgt_vocab', None)
+            import spacy
+            self.nlp_de = spacy.load("de_core_news_sm")
+            self.device = next(self.parameters()).device
+        else:
+            self.src_vocab = None
+            self.tgt_vocab = None
+            self.nlp_de = None
+            self.device = next(self.parameters()).device
 
     # ── AUTOGRADER HOOKS ── keep these signatures exactly ─────────────
 
