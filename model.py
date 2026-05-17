@@ -444,12 +444,14 @@ class Transformer(nn.Module):
             d_ff      = cfg.get('d_ff',      d_ff)
             dropout   = cfg.get('dropout',   dropout)
 
+        # If vocab sizes still unknown, download checkpoint to read model_config
+        _autoload_ckpt = None
         if src_vocab_size is None or tgt_vocab_size is None:
             _tmp = "checkpoint_autograder.pt"
             if not os.path.exists(_tmp):
                 gdown.download(id=self._GDRIVE_FILE_ID, output=_tmp, quiet=False)
-            _ckpt = torch.load(_tmp, map_location='cpu')
-            _cfg = _ckpt.get('model_config', {})
+            _autoload_ckpt = torch.load(_tmp, map_location='cpu')
+            _cfg = _autoload_ckpt.get('model_config', {})
             src_vocab_size = _cfg.get('src_vocab_size', 18669)
             tgt_vocab_size = _cfg.get('tgt_vocab_size', 9797)
             d_model   = _cfg.get('d_model',   d_model)
@@ -474,20 +476,24 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-        if checkpoint_path is not None:
-            self.load_state_dict(ckpt['model_state_dict'])
+        # Load weights from whichever checkpoint was provided/downloaded
+        _resolved_ckpt = ckpt if checkpoint_path is not None else _autoload_ckpt
+        if _resolved_ckpt is not None:
+            self.load_state_dict(_resolved_ckpt['model_state_dict'])
             self.eval()
-            # vocab dicts + spaCy tokenizer needed for infer()
-            self.src_vocab = ckpt.get('src_vocab', None)
-            self.tgt_vocab = ckpt.get('tgt_vocab', None)
-            import spacy
-            self.nlp_de = spacy.load("de_core_news_sm")
-            self.device = next(self.parameters()).device
-        else:
-            self.src_vocab = None
-            self.tgt_vocab = None
-            self.nlp_de = None
-            self.device = next(self.parameters()).device
+
+        # vocab dicts + spaCy needed for infer() — load from checkpoint if available
+        _src_vocab = None
+        _tgt_vocab = None
+        if _resolved_ckpt is not None:
+            _src_vocab = _resolved_ckpt.get('src_vocab', None)
+            _tgt_vocab = _resolved_ckpt.get('tgt_vocab', None)
+        self.src_vocab = _src_vocab
+        self.tgt_vocab = _tgt_vocab
+        self.device = next(self.parameters()).device
+
+        import spacy
+        self.nlp_de = spacy.load("de_core_news_sm")
 
     # ── AUTOGRADER HOOKS ── keep these signatures exactly ─────────────
 
