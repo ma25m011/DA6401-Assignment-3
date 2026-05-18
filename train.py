@@ -338,9 +338,14 @@ def load_checkpoint(
 
     """
     import os, gdown
-    if not os.path.exists(path):
+    if not os.path.exists(path) or os.path.getsize(path) < 1_000_000:
         os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-        gdown.download(id=Transformer._GDRIVE_FILE_ID, output=path, quiet=False)
+        gdown.download(
+            url=f"https://drive.google.com/uc?id={Transformer._GDRIVE_FILE_ID}&confirm=t",
+            output=path, quiet=False,
+        )
+        if not os.path.exists(path) or os.path.getsize(path) < 1_000_000:
+            gdown.download(id=Transformer._GDRIVE_FILE_ID, output=path, quiet=False)
     ckpt = torch.load(path, map_location='cpu')
 
     # If model's embedding sizes differ from checkpoint's, rebuild layers to match

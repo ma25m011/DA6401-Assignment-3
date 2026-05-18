@@ -432,8 +432,16 @@ class Transformer(nn.Module):
         super().__init__()
 
         if checkpoint_path is not None:
-            if not os.path.exists(checkpoint_path):
-                gdown.download(id=self._GDRIVE_FILE_ID, output=checkpoint_path, quiet=False)
+            if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) < 1_000_000:
+                _dir = os.path.dirname(checkpoint_path)
+                if _dir:
+                    os.makedirs(_dir, exist_ok=True)
+                gdown.download(
+                    url=f"https://drive.google.com/uc?id={self._GDRIVE_FILE_ID}&confirm=t",
+                    output=checkpoint_path, quiet=False,
+                )
+                if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) < 1_000_000:
+                    gdown.download(id=self._GDRIVE_FILE_ID, output=checkpoint_path, quiet=False)
             ckpt = torch.load(checkpoint_path, map_location='cpu')
             cfg = ckpt.get('model_config', {})
             src_vocab_size = cfg.get('src_vocab_size', src_vocab_size)
