@@ -555,6 +555,12 @@ class Transformer(nn.Module):
         """
         self.eval()
         with torch.no_grad():
+            if self.src_vocab is None:
+                import json, pathlib
+                _vocab_file = pathlib.Path(__file__).parent / 'vocab.json'
+                _v = json.loads(_vocab_file.read_text(encoding='utf-8'))
+                self.src_vocab = _v['src_vocab']
+                self.tgt_vocab = _v['tgt_vocab']
             if self.nlp_de is None:
                 try:
                     import spacy
