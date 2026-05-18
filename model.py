@@ -562,9 +562,13 @@ class Transformer(nn.Module):
         with torch.inference_mode():
             if self.src_vocab is None:
                 import json, pathlib
-                _v = json.loads((pathlib.Path(__file__).parent / 'vocab.json').read_text(encoding='utf-8'))
-                self.src_vocab = _v['src_vocab']
-                self.tgt_vocab = _v['tgt_vocab']
+                _vpath = pathlib.Path(__file__).parent / 'vocab.json'
+                if _vpath.exists():
+                    _v = json.loads(_vpath.read_text(encoding='utf-8'))
+                    self.src_vocab = _v['src_vocab']
+                    self.tgt_vocab = _v['tgt_vocab']
+            if self.src_vocab is None:
+                return ''
             if hasattr(self.nlp_de, 'pipe'):
                 tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
             else:
