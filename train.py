@@ -215,6 +215,8 @@ def evaluate_bleu(
     # Use model's own vocab for decoding outputs; fall back to passed tgt_vocab
     model_tgt_vocab = getattr(model, 'tgt_vocab', None) or tgt_vocab
     model_src_vocab = getattr(model, 'src_vocab', None)
+    print(f"[evaluate_bleu] model_src_vocab={'SET' if model_src_vocab else None}, model_tgt_vocab={'SET' if model_tgt_vocab else None}, passed tgt_vocab type={type(tgt_vocab).__name__}", flush=True)
+    print(f"[evaluate_bleu] test_dataloader.dataset type={type(test_dataloader.dataset).__name__}, has src_vocab={hasattr(test_dataloader.dataset, 'src_vocab')}", flush=True)
 
     model_idx_to_tok = {v: k for k, v in model_tgt_vocab.items()}
     model_special = {model_tgt_vocab.get('<sos>', 2), model_tgt_vocab.get('<eos>', 3), model_tgt_vocab.get('<pad>', 1)}
@@ -338,10 +340,14 @@ def load_checkpoint(
 
     """
     import os, gdown
+    print(f"[load_checkpoint] called with path={path}, exists={os.path.exists(path)}", flush=True)
     if not os.path.exists(path):
         os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        print(f"[load_checkpoint] downloading from Drive id={Transformer._GDRIVE_FILE_ID}", flush=True)
         gdown.download(id=Transformer._GDRIVE_FILE_ID, output=path, quiet=False)
+        print(f"[load_checkpoint] download finished, file size={os.path.getsize(path) if os.path.exists(path) else 'MISSING'}", flush=True)
     ckpt = torch.load(path, map_location='cpu')
+    print(f"[load_checkpoint] loaded ckpt keys={list(ckpt.keys())}", flush=True)
     model.load_state_dict(ckpt['model_state_dict'])
     if optimizer is not None:
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
