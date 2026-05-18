@@ -573,16 +573,16 @@ class Transformer(nn.Module):
         self.eval()
         with torch.no_grad():
             if self.nlp_de is None:
-                import spacy, subprocess, sys
                 try:
+                    import spacy
                     self.nlp_de = spacy.load("de_core_news_sm")
                 except OSError:
-                    subprocess.run(
-                        [sys.executable, "-m", "spacy", "download", "de_core_news_sm"],
-                        check=True
-                    )
-                    self.nlp_de = spacy.load("de_core_news_sm")
-            tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
+                    import re
+                    self.nlp_de = lambda text: re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
+            if hasattr(self.nlp_de, 'pipe'):
+                tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
+            else:
+                tokens = [t.lower() for t in self.nlp_de(src_sentence)]
             sos = self.src_vocab.get('<sos>', 2)
             eos = self.src_vocab.get('<eos>', 3)
             unk = self.src_vocab.get('<unk>', 0)
