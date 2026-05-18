@@ -474,8 +474,18 @@ class Transformer(nn.Module):
             self.tgt_vocab = None
 
         if self.src_vocab is None:
-            import json, pathlib
+            import json, pathlib, tempfile, urllib.request
             _vpath = pathlib.Path(__file__).parent / 'vocab.json'
+            if not _vpath.exists():
+                _vpath = pathlib.Path(tempfile.gettempdir()) / 'da6401_vocab.json'
+                if not _vpath.exists():
+                    try:
+                        urllib.request.urlretrieve(
+                            'https://raw.githubusercontent.com/ma25m011/DA6401-Assignment-3/main/vocab.json',
+                            str(_vpath),
+                        )
+                    except Exception:
+                        pass
             if _vpath.exists():
                 _v = json.loads(_vpath.read_text(encoding='utf-8'))
                 self.src_vocab = _v['src_vocab']
@@ -569,8 +579,18 @@ class Transformer(nn.Module):
         self.eval()
         with torch.inference_mode():
             if self.src_vocab is None:
-                import json, pathlib
+                import json, pathlib, tempfile, urllib.request
                 _vpath = pathlib.Path(__file__).parent / 'vocab.json'
+                if not _vpath.exists():
+                    _vpath = pathlib.Path(tempfile.gettempdir()) / 'da6401_vocab.json'
+                    if not _vpath.exists():
+                        try:
+                            urllib.request.urlretrieve(
+                                'https://raw.githubusercontent.com/ma25m011/DA6401-Assignment-3/main/vocab.json',
+                                str(_vpath),
+                            )
+                        except Exception:
+                            pass
                 if _vpath.exists():
                     _v = json.loads(_vpath.read_text(encoding='utf-8'))
                     self.src_vocab = _v['src_vocab']
