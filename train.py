@@ -324,6 +324,10 @@ def load_checkpoint(
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
     if scheduler is not None:
         scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+    if hasattr(model, 'src_vocab') and model.src_vocab is None:
+        model.src_vocab = ckpt.get('src_vocab', None)
+    if hasattr(model, 'tgt_vocab') and model.tgt_vocab is None:
+        model.tgt_vocab = ckpt.get('tgt_vocab', None)
     return int(ckpt['epoch'])
 
 

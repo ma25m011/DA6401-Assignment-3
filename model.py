@@ -444,21 +444,9 @@ class Transformer(nn.Module):
             d_ff      = cfg.get('d_ff',      d_ff)
             dropout   = cfg.get('dropout',   dropout)
 
-        # If vocab sizes still unknown, download checkpoint to read model_config
-        _autoload_ckpt = None
         if src_vocab_size is None or tgt_vocab_size is None:
-            _tmp = "checkpoint_autograder.pt"
-            if not os.path.exists(_tmp):
-                gdown.download(id=self._GDRIVE_FILE_ID, output=_tmp, quiet=False)
-            _autoload_ckpt = torch.load(_tmp, map_location='cpu')
-            _cfg = _autoload_ckpt.get('model_config', {})
-            src_vocab_size = _cfg.get('src_vocab_size', 18669)
-            tgt_vocab_size = _cfg.get('tgt_vocab_size', 9797)
-            d_model   = _cfg.get('d_model',   d_model)
-            N         = _cfg.get('N',         N)
-            num_heads = _cfg.get('num_heads', num_heads)
-            d_ff      = _cfg.get('d_ff',      d_ff)
-            dropout   = _cfg.get('dropout',   dropout)
+            src_vocab_size = 18669
+            tgt_vocab_size = 9797
 
         self.d_model = d_model
 
@@ -476,22 +464,17 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-        # Load weights from whichever checkpoint was provided/downloaded
-        _resolved_ckpt = ckpt if checkpoint_path is not None else _autoload_ckpt
-        if _resolved_ckpt is not None:
-            self.load_state_dict(_resolved_ckpt['model_state_dict'])
+        if checkpoint_path is not None:
+            self.load_state_dict(ckpt['model_state_dict'])
             self.eval()
+            self.src_vocab = ckpt.get('src_vocab', None)
+            self.tgt_vocab = ckpt.get('tgt_vocab', None)
+        else:
+            self.src_vocab = None
+            self.tgt_vocab = None
 
-        # vocab dicts + spaCy needed for infer() — load from checkpoint if available
-        _src_vocab = None
-        _tgt_vocab = None
-        if _resolved_ckpt is not None:
-            _src_vocab = _resolved_ckpt.get('src_vocab', None)
-            _tgt_vocab = _resolved_ckpt.get('tgt_vocab', None)
-        self.src_vocab = _src_vocab
-        self.tgt_vocab = _tgt_vocab
         self.device = next(self.parameters()).device
-        self.nlp_de = None  # loaded lazily in infer()
+        self.nlp_de = None
 
     # ── AUTOGRADER HOOKS ── keep these signatures exactly ─────────────
 
