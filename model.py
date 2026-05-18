@@ -491,9 +491,7 @@ class Transformer(nn.Module):
         self.src_vocab = _src_vocab
         self.tgt_vocab = _tgt_vocab
         self.device = next(self.parameters()).device
-
-        import spacy
-        self.nlp_de = spacy.load("de_core_news_sm")
+        self.nlp_de = None  # loaded lazily in infer()
 
     # ── AUTOGRADER HOOKS ── keep these signatures exactly ─────────────
 
@@ -574,7 +572,17 @@ class Transformer(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
+            # Lazy-load spaCy; fall back to simple whitespace tokenization
+            if self.nlp_de is None:
+                try:
+                    import spacy
+                    self.nlp_de = spacy.load("de_core_news_sm")
+                except OSError:
+                    self.nlp_de = lambda text: text.lower().split()
+            if callable(self.nlp_de) and hasattr(self.nlp_de, 'pipe'):
+                tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
+            else:
+                tokens = self.nlp_de(src_sentence)
             sos = self.src_vocab.get('<sos>', 2)
             eos = self.src_vocab.get('<eos>', 3)
             unk = self.src_vocab.get('<unk>', 0)
