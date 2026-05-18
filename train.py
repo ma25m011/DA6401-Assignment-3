@@ -211,8 +211,27 @@ def evaluate_bleu(
     from nltk.translate.bleu_score import corpus_bleu
 
     model.eval()
-    idx_to_tok = {v: k for k, v in tgt_vocab.items()}
-    special = {tgt_vocab.get('<sos>', 2), tgt_vocab.get('<eos>', 3), tgt_vocab.get('<pad>', 1)}
+
+    # Use model's own vocab for decoding outputs; fall back to passed tgt_vocab
+    model_tgt_vocab = getattr(model, 'tgt_vocab', None) or tgt_vocab
+    model_src_vocab = getattr(model, 'src_vocab', None)
+
+    model_idx_to_tok = {v: k for k, v in model_tgt_vocab.items()}
+    model_special = {model_tgt_vocab.get('<sos>', 2), model_tgt_vocab.get('<eos>', 3), model_tgt_vocab.get('<pad>', 1)}
+    sos = model_tgt_vocab.get('<sos>', 2)
+    eos = model_tgt_vocab.get('<eos>', 3)
+
+    # Build remap from dataloader's src indices → model's src indices (handles vocab mismatch)
+    dl_src_vocab = getattr(test_dataloader.dataset, 'src_vocab', None)
+    if model_src_vocab and dl_src_vocab and model_src_vocab != dl_src_vocab:
+        dl_idx_to_src_tok = {v: k for k, v in dl_src_vocab.items()}
+        src_remap = {dl_idx: model_src_vocab.get(tok, model_src_vocab.get('<unk>', 0))
+                     for dl_idx, tok in dl_idx_to_src_tok.items()}
+    else:
+        src_remap = None
+
+    ref_idx_to_tok = {v: k for k, v in tgt_vocab.items()}
+    ref_special = {tgt_vocab.get('<sos>', 2), tgt_vocab.get('<eos>', 3), tgt_vocab.get('<pad>', 1)}
 
     hypotheses = []
     references = []
@@ -220,17 +239,17 @@ def evaluate_bleu(
     with torch.no_grad():
         for src, tgt in test_dataloader:
             for i in range(src.size(0)):
-                src_i = src[i].unsqueeze(0).to(device)
+                src_i = src[i].unsqueeze(0)
+                if src_remap is not None:
+                    src_i = src_i.clone().apply_(lambda x: src_remap.get(x, x))
+                src_i = src_i.to(device)
                 src_mask_i = make_src_mask(src_i)
-                sos = tgt_vocab.get('<sos>', 2)
-                eos = tgt_vocab.get('<eos>', 3)
 
                 out = greedy_decode(model, src_i, src_mask_i, max_len, sos, eos, device)
-                # out: [1, out_len] — strip <sos> at index 0
-                hyp = [idx_to_tok.get(t.item(), '<unk>') for t in out[0, 1:] if t.item() not in special]
+                hyp = [model_idx_to_tok.get(t.item(), '<unk>') for t in out[0, 1:] if t.item() not in model_special]
 
                 ref_ids = tgt[i].tolist()
-                ref = [idx_to_tok.get(t, '<unk>') for t in ref_ids if t not in special]
+                ref = [ref_idx_to_tok.get(t, '<unk>') for t in ref_ids if t not in ref_special]
 
                 hypotheses.append(hyp)
                 references.append([ref])
