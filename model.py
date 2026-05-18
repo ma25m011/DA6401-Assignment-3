@@ -572,17 +572,17 @@ class Transformer(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            # Lazy-load spaCy; fall back to simple whitespace tokenization
             if self.nlp_de is None:
+                import spacy, subprocess, sys
                 try:
-                    import spacy
                     self.nlp_de = spacy.load("de_core_news_sm")
                 except OSError:
-                    self.nlp_de = lambda text: text.lower().split()
-            if callable(self.nlp_de) and hasattr(self.nlp_de, 'pipe'):
-                tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
-            else:
-                tokens = self.nlp_de(src_sentence)
+                    subprocess.run(
+                        [sys.executable, "-m", "spacy", "download", "de_core_news_sm"],
+                        check=True
+                    )
+                    self.nlp_de = spacy.load("de_core_news_sm")
+            tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
             sos = self.src_vocab.get('<sos>', 2)
             eos = self.src_vocab.get('<eos>', 3)
             unk = self.src_vocab.get('<unk>', 0)
