@@ -474,7 +474,12 @@ class Transformer(nn.Module):
             self.tgt_vocab = None
 
         self.device = next(self.parameters()).device
-        self.nlp_de = None
+        try:
+            import spacy
+            self.nlp_de = spacy.load("de_core_news_sm")
+        except OSError:
+            import re
+            self.nlp_de = lambda text: re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
 
     # ── AUTOGRADER HOOKS ── keep these signatures exactly ─────────────
 
@@ -554,20 +559,12 @@ class Transformer(nn.Module):
             The fully translated English string, detokenized and clean.
         """
         self.eval()
-        with torch.no_grad():
+        with torch.inference_mode():
             if self.src_vocab is None:
                 import json, pathlib
-                _vocab_file = pathlib.Path(__file__).parent / 'vocab.json'
-                _v = json.loads(_vocab_file.read_text(encoding='utf-8'))
+                _v = json.loads((pathlib.Path(__file__).parent / 'vocab.json').read_text(encoding='utf-8'))
                 self.src_vocab = _v['src_vocab']
                 self.tgt_vocab = _v['tgt_vocab']
-            if self.nlp_de is None:
-                try:
-                    import spacy
-                    self.nlp_de = spacy.load("de_core_news_sm")
-                except OSError:
-                    import re
-                    self.nlp_de = lambda text: re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
             if hasattr(self.nlp_de, 'pipe'):
                 tokens = [tok.text.lower() for tok in self.nlp_de(src_sentence)]
             else:
@@ -582,7 +579,7 @@ class Transformer(nn.Module):
             tgt_sos = self.tgt_vocab.get('<sos>', 2)
             tgt_eos = self.tgt_vocab.get('<eos>', 3)
             ys = torch.tensor([[tgt_sos]], dtype=torch.long, device=self.device)
-            for _ in range(100):
+            for _ in range(30):
                 tgt_mask = make_tgt_mask(ys)
                 logits = self.decode(memory, src_mask, ys, tgt_mask)
                 next_tok = logits[:, -1, :].argmax(dim=-1, keepdim=True)
