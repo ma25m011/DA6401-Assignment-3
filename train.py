@@ -337,6 +337,10 @@ def load_checkpoint(
         epoch : The epoch at which the checkpoint was saved (int).
 
     """
+    import os, gdown
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        gdown.download(id=Transformer._GDRIVE_FILE_ID, output=path, quiet=False)
     ckpt = torch.load(path, map_location='cpu')
     model.load_state_dict(ckpt['model_state_dict'])
     if optimizer is not None:
