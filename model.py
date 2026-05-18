@@ -473,6 +473,14 @@ class Transformer(nn.Module):
             self.src_vocab = None
             self.tgt_vocab = None
 
+        if self.src_vocab is None:
+            import json, pathlib
+            _vpath = pathlib.Path(__file__).parent / 'vocab.json'
+            if _vpath.exists():
+                _v = json.loads(_vpath.read_text(encoding='utf-8'))
+                self.src_vocab = _v['src_vocab']
+                self.tgt_vocab = _v['tgt_vocab']
+
         self.device = next(self.parameters()).device
         try:
             import spacy
