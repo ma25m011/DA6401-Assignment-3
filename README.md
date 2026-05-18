@@ -10,8 +10,8 @@ Implementation of the Transformer architecture from ["Attention Is All You Need"
 
 ## Links
 
+- **GitHub Repository:** [DA6401-Assignment-3](https://github.com/ma25m011/DA6401-Assignment-3)
 - **W&B Report:** [DA6401 Assignment 3 — Transformer for German→English NMT](https://wandb.ai/ma25m011-ii/da6401-a3/reports/DA6401-Assignment-3-Transformer-for-German-English-NMT-Multi30k---VmlldzoxNjg2ODk5MQ?accessToken=7rf80ox6f2lpmo8sbqvv7a33tcovue0nsyqcwfbamiqwk6ptskf0sser7dg29e68)
-- **W&B Project:** [da6401-a3](https://wandb.ai/ma25m011-ii/da6401-a3)
 - **Best Checkpoint (Google Drive):** [checkpoint_epoch19.pt](https://drive.google.com/file/d/1nxN-ZgwXUos5aU_v6172baqMHwO39Vvf/view?usp=drive_link)
 
 ## Project Structure

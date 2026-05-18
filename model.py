@@ -573,12 +573,13 @@ class Transformer(nn.Module):
             eos = self.src_vocab.get('<eos>', 3)
             unk = self.src_vocab.get('<unk>', 0)
             src_ids = [sos] + [self.src_vocab.get(t, unk) for t in tokens] + [eos]
-            src = torch.tensor([src_ids], dtype=torch.long, device=self.device)
+            device = next(self.parameters()).device
+            src = torch.tensor([src_ids], dtype=torch.long, device=device)
             src_mask = make_src_mask(src)
             memory = self.encode(src, src_mask)
             tgt_sos = self.tgt_vocab.get('<sos>', 2)
             tgt_eos = self.tgt_vocab.get('<eos>', 3)
-            ys = torch.tensor([[tgt_sos]], dtype=torch.long, device=self.device)
+            ys = torch.tensor([[tgt_sos]], dtype=torch.long, device=device)
             for _ in range(30):
                 tgt_mask = make_tgt_mask(ys)
                 logits = self.decode(memory, src_mask, ys, tgt_mask)
