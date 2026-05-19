@@ -415,8 +415,11 @@ class Transformer(nn.Module):
                                 load model_config and weights automatically.
     """
 
-    # Google Drive file ID for the best checkpoint
+    # Google Drive file ID for the best checkpoint (legacy fallback)
     _GDRIVE_FILE_ID = "1nxN-ZgwXUos5aU_v6172baqMHwO39Vvf"
+    # Primary checkpoint URL on Hugging Face Hub (no quota, reliable HTTP)
+    _HF_CKPT_URL = "https://huggingface.co/ricKotte/da6401-a3-transformer/resolve/main/checkpoint_epoch19.pt"
+    _HF_VOCAB_URL = "https://huggingface.co/ricKotte/da6401-a3-transformer/resolve/main/vocab.json"
 
     def __init__(
         self,
@@ -436,12 +439,16 @@ class Transformer(nn.Module):
                 _dir = os.path.dirname(checkpoint_path)
                 if _dir:
                     os.makedirs(_dir, exist_ok=True)
-                gdown.download(
-                    url=f"https://drive.google.com/uc?id={self._GDRIVE_FILE_ID}&confirm=t",
-                    output=checkpoint_path, quiet=False,
-                )
+                import urllib.request
+                try:
+                    urllib.request.urlretrieve(self._HF_CKPT_URL, checkpoint_path)
+                except Exception:
+                    pass
                 if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) < 1_000_000:
-                    gdown.download(id=self._GDRIVE_FILE_ID, output=checkpoint_path, quiet=False)
+                    gdown.download(
+                        url=f"https://drive.google.com/uc?id={self._GDRIVE_FILE_ID}&confirm=t",
+                        output=checkpoint_path, quiet=False,
+                    )
             ckpt = torch.load(checkpoint_path, map_location='cpu')
             cfg = ckpt.get('model_config', {})
             src_vocab_size = cfg.get('src_vocab_size', src_vocab_size)
@@ -488,10 +495,7 @@ class Transformer(nn.Module):
                 _vpath = pathlib.Path(tempfile.gettempdir()) / 'da6401_vocab.json'
                 if not _vpath.exists():
                     try:
-                        urllib.request.urlretrieve(
-                            'https://raw.githubusercontent.com/ma25m011/DA6401-Assignment-3/main/vocab.json',
-                            str(_vpath),
-                        )
+                        urllib.request.urlretrieve(self._HF_VOCAB_URL, str(_vpath))
                     except Exception:
                         pass
             if _vpath.exists():
